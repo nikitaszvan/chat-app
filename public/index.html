@@ -1,43 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="Web site created using create-react-app"
-    />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
-
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
     <title>React App</title>
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="../src/index.js" type="text/jsx"></script>
+    <script>
+      var socket = io();
+      var messages = document.getElementById('messages');
+      // var usernameForm = document.getElementById('username-form');
+      // var usernameInput = document.getElementById('username-input');
+      var messagesForm = document.getElementById('messages-form');
+      var messagesInput = document.getElementById('messages-input');
 
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
+      var typingArray = new Array(12).fill(!1);
+      var statusArray = new Array(12).fill(!1);
+      // var checkTypingNotif;
+      var itemPlaceholder;
+      let username;
 
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
+      // usernameForm.addEventListener('submit', (e) => {
+      //   e.preventDefault();
+      //   if (usernameInput.value) {
+
+      //     socket.emit('change username', usernameInput.value);
+      //     usernameInput.value = '';
+      //   }
+      // });
+
+      messagesForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (messagesInput.value) {
+          socket.emit('chat message', messagesInput.value);
+          messagesInput.value = '';
+        }
+      });
+
+      messagesInput.addEventListener('input', (e) => {
+        socket.emit('typing notification', { message: messagesInput.value });
+      });
+    
+      socket.on('send data', function(data) {
+        workerId = data.workerId;
+        username = data.username;
+
+        const workerIndex = workerId-1;
+        typingArray[workerIndex] = data.disconnect ? data.disconnect : Boolean(data.inputContent);
+        statusArray[workerIndex] = data.disconnect == undefined ? true : false ;
+
+        if (document.querySelector(`img.status-symbol.worker-${workerId}`)) {
+          const statusSymbols = document.querySelectorAll(`img.status-symbol.worker-${workerId}`);
+
+          statusSymbols.forEach((statusSymbol) => {
+            if (typingArray[workerIndex]) {
+              statusSymbol.classList.remove('online');
+              statusSymbol.classList.add('typing');
+            }
+            else if (statusArray[workerIndex]) {
+              statusSymbol.classList.remove('typing');
+              statusSymbol.classList.add('online');
+            } else {
+              statusSymbol.classList.remove('online');
+            }
+          });
+        }
+      });
+
+      socket.on('chat message', function(data) {
+        window.scrollTo(0, document.body.scrollHeight);
+        const lastElement = messages.lastElementChild;
+        var item = document.createElement('li');
+        var firstMessageDiv = document.createElement('div');
+        firstMessageDiv.classList.add('first-message-div');
+        var profilePicture = document.createElement('img');
+        profilePicture.src = `images/worker${workerId}_profile_pic.jpg`;
+        profilePicture.alt = `worker${workerId} profile picture`;
+        var time = document.createElement('p');
+        time.style.display = 'none';
+        var messageUsername = document.createElement('li');
+        profilePicture.classList.add('status-symbol');
+        profilePicture.classList.add(`worker-${workerId}`);
+        profilePicture.classList.add(`online`);
+        const allFalseArray = typingArray.every(value => value === false);
+
+        messageUsername.classList.add('message-username');
+
+        item.addEventListener('click', () => {
+          time.style.display = (time.style.display === 'none') ? 'block' : 'none';
+        });
+
+        if (data) {
+          item.textContent = `${data.message}`;
+          time.textContent = new Date(Date.now()).toLocaleString('en-US', {hour: '2-digit', minute: '2-digit'});
+          if (data.class) {
+            item.classList.add(data.class);
+            time.classList.add(data.class);
+            firstMessageDiv.classList.add(data.class);
+            messageUsername.classList.add(data.class);
+            item.classList.add(`worker-${workerId}`);
+            time.classList.add(`worker-${workerId}`);
+            if (lastElement && lastElement.previousElementSibling && (item.classList.value == lastElement.previousElementSibling.classList.value)) {
+              lastElement.previousElementSibling.classList.add('not-last-message');
+            }
+          }
+          else {
+            item.classList.add('general');
+          }
+
+          if (lastElement && !lastElement.classList.contains(`worker-${workerId}`)) {
+            messageUsername.textContent = username;
+            if (!item.textContent.includes('changed their username to') && !item.classList.contains('general')) {
+              console.log('1');
+              messages.appendChild(messageUsername)
+              if (data.class == 'local') {
+                console.log('2');
+                firstMessageDiv.appendChild(item);
+                firstMessageDiv.appendChild(profilePicture);
+              }
+              else {
+                console.log('3');
+                firstMessageDiv.appendChild(profilePicture);
+                firstMessageDiv.appendChild(item);
+              }
+              messages.appendChild(firstMessageDiv);
+              item.classList.add('first-message');
+              messages.appendChild(time);
+            }
+            else {
+              messageUsername.remove();
+              firstMessageDiv.remove();
+              profilePicture.remove();
+              messages.appendChild(item);
+              messages.appendChild(time);
+            }
+          }
+          else {
+            messageUsername.remove();
+            firstMessageDiv.remove();
+            profilePicture.remove();
+            messages.appendChild(item);
+            messages.appendChild(time);
+          }
+
+        }
+      });
+    </script>
   </body>
 </html>
